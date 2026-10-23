@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaTask - Oceaan Kanban & To-Do</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ocean: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            800: '#075985',
+                            900: '#0369a1',
+                            950: '#082f49',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Ambient Wave Animations */
+        @keyframes floatBubble {
+            0% { transform: translateY(100vh) scale(0.3); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+        }
+
+        .bubble {
+            position: absolute;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.1) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: floatBubble linear infinite;
+        }
+
+        /* Glassmorphism Styles */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #f8fafc;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.6);
+        }
+
+        .kanban-col-header-text {
+            color: #ffffff;
+        }
+
+        .drag-over {
+            background-color: rgba(56, 189, 248, 0.15) !important;
+            border-style: dashed !important;
+            border-color: #38bdf8 !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 relative overflow-x-hidden selection:bg-cyan-500 selection:text-white transition-colors duration-300">
+
+    <!-- Dynamic Ocean Background -->
+    <div id="ocean-bg" class="fixed inset-0 pointer-events-none z-0 bg-gradient-to-b from-slate-950 via-slate-900 to-sky-950 transition-colors duration-500">
+        <div class="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-400 via-sky-500 to-transparent"></div>
+        <div id="bubbles-container" class="absolute inset-0"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Navigation / Header -->
+        <header class="glass-panel rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+                    <i data-lucide="waves" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        AquaTask <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">v2.5</span>
+                    </h1>
+                    <p class="text-xs text-cyan-200/70">Capture, organize and tackle your to-dos</p>
+                </div>
+            </div>
+
+            <!-- Header Controls -->
+            <div class="flex items-center flex-wrap gap-2 sm:gap-3">
+                <!-- Sound Toggle -->
+                <button onclick="toggleAmbientSound()" id="sound-btn" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-medium text-cyan-200 border border-white/10 transition-all">
+                    <i data-lucide="volume-2" id="sound-icon" class="w-4 h-4 text-emerald-400"></i>
+                    <span id="sound-text" class="hidden sm:inline">Sfeer Muziek (AAN)</span>
+                </button>
+
+                <!-- Data Options Dropdown (Database Icon) -->
+                <div class="relative">
+                    <button onclick="toggleDataMenu()" class="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-200 transition-all border border-white/10 flex items-center justify-center min-w-[38px] min-h-[38px] active:scale-95" title="Data & Backup Opties">
+                        <i data-lucide="database" class="w-4 h-4 text-cyan-400"></i>
+                    </button>
+                    
+                    <div id="data-menu" class="hidden absolute right-0 mt-2 w-52 glass-panel rounded-xl shadow-2xl border border-white/10 p-2 z-50 space-y-1">
+                        <button onclick="exportData()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-white/10 text-cyan-100 flex items-center gap-2 transition-all">
+                            <i data-lucide="download" class="w-4 h-4 text-cyan-400"></i> Exporteer Data (JSON)
+                        </button>
+                        <button onclick="triggerImport()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-white/10 text-cyan-100 flex items-center gap-2 transition-all">
+                            <i data-lucide="upload" class="w-4 h-4 text-emerald-400"></i> Importeer Data
+                        </button>
+                        <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="importData(event)">
+                        <div class="border-t border-white/10 my-1"></div>
+                        <button onclick="clearCompletedTasks()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-red-500/20 text-red-300 flex items-center gap-2 transition-all">
+                            <i data-lucide="trash" class="w-4 h-4 text-red-400"></i> Wis Voltooide
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Progress Bar & Phase Stats Monitor (Bovenaan geplaatst) -->
+        <section class="glass-panel rounded-2xl p-4 space-y-4 shadow-lg">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5 text-cyan-400"></i>
+                    <h2 class="font-semibold text-sm text-white">Totale Voortgang</h2>
+                </div>
+                <span id="overall-progress-text" class="text-xs font-bold font-mono text-cyan-300">0% Voltooid</span>
+            </div>
+            
+            <div class="w-full h-2.5 bg-black/30 rounded-full overflow-hidden p-0.5 border border-white/5">
+                <div id="overall-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+
+            <!-- Phase Monitors Container -->
+            <div id="phase-stats-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-2">
+                <!-- Dynamisch gegenereerd -->
+            </div>
+        </section>
+
+        <!-- Task Input Box & Phase Creation -->
+        <section class="glass-panel rounded-2xl p-5 shadow-xl space-y-4 border border-white/10">
+            <form id="add-task-form" onsubmit="handleAddTask(event)" class="space-y-3">
+                <div class="space-y-3">
+                    <!-- Title Row -->
+                    <div>
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Taak Titel *</label>
+                        <input type="text" id="task-title" placeholder="Wat moet er gebeuren?" required
+                            class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400 transition-all">
+                    </div>
+
+                    <!-- Subtitle / Description Row (Onder de titel) -->
+                    <div>
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Ondertitel / Beschrijving (optioneel)</label>
+                        <input type="text" id="task-subtitle" placeholder="Korte toelichting of extra details..."
+                            class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400 transition-all">
+                    </div>
+
+                    <!-- Assignee / Person Responsible Row -->
+                    <div>
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Wie is hiermee bezig? (optioneel)</label>
+                        <input type="text" id="task-assignee" placeholder="bijv. Jan, Sarah, Team A..."
+                            class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400 transition-all">
+                    </div>
+                </div>
+
+                <!-- Phase, Date & Submit Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2 items-end">
+                    <div class="sm:col-span-5">
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Selecteer Type / Fase</label>
+                        <select id="task-phase-select" class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white focus:outline-none focus:border-cyan-400 transition-all">
+                            <!-- Dynamic Options -->
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-4">
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Vervaldatum</label>
+                        <input type="date" id="task-due-date" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-xs text-cyan-200 focus:outline-none h-[42px]">
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <button type="submit" class="w-full h-[42px] px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs tracking-wide shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                            <span>Taak Toevoegen</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Nieuw Type / Fase Knop als Database Icoontje -->
+            <div class="pt-3 border-t border-white/10 flex items-center justify-between">
+                <span class="text-xs text-cyan-200/70 font-medium">Beheer fasen & categorieën</span>
+                <button onclick="openPhaseModal()" title="Nieuwe fase of categorie toevoegen" class="p-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/30 transition-all flex items-center gap-2 text-xs font-semibold">
+                    <i data-lucide="database" class="w-4 h-4 text-cyan-400"></i>
+                    <span class="hidden sm:inline">Nieuwe Fase</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Search Bar -->
+        <div class="flex items-center justify-between gap-4">
+            <div class="relative flex-1">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cyan-300/60"></i>
+                <input type="text" id="search-input" oninput="renderKanbanColumns()" placeholder="Zoek op titel of ondertitel..." 
+                       class="w-full pl-9 pr-4 py-2 rounded-xl glass-panel text-xs text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400">
+            </div>
+        </div>
+
+        <!-- Kanban Board Columns (To Do, Doing, Done) -->
+        <main id="kanban-container" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Dynamic Kanban Columns -->
+        </main>
+    </div>
+
+    <!-- Modal: Add New Phase / Type -->
+    <div id="phase-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/20 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i data-lucide="folder-plus" class="w-5 h-5 text-cyan-400"></i> Nieuw Type / Fase Toevoegen
+                </h3>
+                <button onclick="closePhaseModal()" class="text-cyan-200/60 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <form onsubmit="handleCreatePhase(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Naam van Type / Fase</label>
+                    <input type="text" id="new-phase-name" placeholder="bijv. Fase 4 of Design" required
+                           class="w-full px-4 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white focus:outline-none focus:border-cyan-400">
+                </div>
+                
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closePhaseModal()" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-cyan-200">Annuleren</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-xs font-bold text-white shadow-lg">Toevoegen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Task -->
+    <div id="edit-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/20 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-5 h-5 text-cyan-400"></i> Taak Bewerken
+                </h3>
+                <button onclick="closeEditModal()" class="text-cyan-200/60 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <form onsubmit="handleSaveEditTask(event)" class="space-y-3">
+                <input type="hidden" id="edit-task-id">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Titel</label>
+                    <input type="text" id="edit-task-title" required class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Ondertitel</label>
+                    <input type="text" id="edit-task-subtitle" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Wie is hiermee bezig?</label>
+                    <input type="text" id="edit-task-assignee" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Fase / Type</label>
+                    <select id="edit-task-phase" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white"></select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Vervaldatum</label>
+                    <input type="date" id="edit-task-date" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 rounded-xl bg-white/5 text-xs text-cyan-200">Annuleren</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-500 text-xs font-bold text-white shadow-lg">Opslaan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        // Global State & Data
+        window.columns = [
+            { id: 'todo', name: 'To Do', color: 'bg-amber-400' },
+            { id: 'doing', name: 'Doing', color: 'bg-cyan-400' },
+            { id: 'done', name: 'Done', color: 'bg-emerald-400' }
+        ];
+
+        window.phases = [
+            { id: 'fase-1', name: 'Fase 1' },
+            { id: 'fase-2', name: 'Fase 2' },
+            { id: 'fase-3', name: 'Fase 3' }
+        ];
+
+        window.tasks = [];
+
+        // Audio System
+        let audioCtx = null;
+        let ambientOscillator = null;
+        let ambientGain = null;
+        let soundEnabled = true;
+
+        // Helper: Escape HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Helper: Toast Notifications
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'glass-panel px-4 py-2.5 rounded-xl text-xs text-cyan-100 shadow-xl border border-white/10 flex items-center gap-2 transform transition-all duration-300 translate-y-2 opacity-0 pointer-events-auto';
+            toast.innerHTML = `<i data-lucide="info" class="w-4 h-4 text-cyan-400"></i> <span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+            if (window.lucide) lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Sound System
+        function initAudio() {
+            if (!audioCtx) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) { console.log("Audio not supported"); }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function startAmbientSound() {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx || ambientOscillator) return;
+
+            try {
+                ambientOscillator = audioCtx.createOscillator();
+                const lfo = audioCtx.createOscillator();
+                const lfoGain = audioCtx.createGain();
+                ambientGain = audioCtx.createGain();
+
+                ambientOscillator.type = 'triangle';
+                ambientOscillator.frequency.setValueAtTime(110, audioCtx.currentTime);
+
+                lfo.frequency.setValueAtTime(0.2, audioCtx.currentTime);
+                lfoGain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+
+                lfo.connect(ambientGain.gain);
+                ambientGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+
+                ambientOscillator.connect(ambientGain);
+                ambientGain.connect(audioCtx.destination);
+
+                ambientOscillator.start();
+                lfo.start();
+            } catch (e) {}
+        }
+
+        function toggleAmbientSound() {
+            soundEnabled = !soundEnabled;
+            const soundIcon = document.getElementById('sound-icon');
+            const soundText = document.getElementById('sound-text');
+
+            if (soundEnabled) {
+                startAmbientSound();
+                if (soundIcon) soundIcon.className = "w-4 h-4 text-emerald-400";
+                if (soundText) soundText.innerText = "Sfeer Muziek (AAN)";
+                showToast("Sfeer muziek ingeschakeld 🎵");
+            } else {
+                if (ambientOscillator) {
+                    try { ambientOscillator.stop(); } catch(e){}
+                    ambientOscillator = null;
+                }
+                if (soundIcon) soundIcon.className = "w-4 h-4 text-cyan-200";
+                if (soundText) soundText.innerText = "Sfeer Muziek (UIT)";
+                showToast("Sfeer muziek uitgeschakeld 🔇");
+            }
+        }
+
+        // Bubble Generation
+        function generateBubbles() {
+            const container = document.getElementById('bubbles-container');
+            if (!container) return;
+            container.innerHTML = '';
+            for (let i = 0; i < 15; i++) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                const size = Math.random() * 20 + 8;
+                bubble.style.width = `${size}px`;
+                bubble.style.height = `${size}px`;
+                bubble.style.left = `${Math.random() * 100}%`;
+                bubble.style.animationDuration = `${Math.random() * 10 + 8}s`;
+                bubble.style.animationDelay = `${Math.random() * 5}s`;
+                container.appendChild(bubble);
+            }
+        }
+
+        // Data Storage & LocalStorage
+        function saveTasks() {
+            try {
+                localStorage.setItem('aquatask_tasks', JSON.stringify(window.tasks));
+                localStorage.setItem('aquatask_phases', JSON.stringify(window.phases));
+            } catch(e){}
+        }
+
+        function loadTasks() {
+            try {
+                const savedTasks = localStorage.getItem('aquatask_tasks');
+                const savedPhases = localStorage.getItem('aquatask_phases');
+
+                if (savedPhases) window.phases = JSON.parse(savedPhases);
+                if (savedTasks) {
+                    window.tasks = JSON.parse(savedTasks);
+                } else {
+                    // Seed initial demo data
+                    window.tasks = [
+                        { id: '1', title: 'Oceaan projectplan opstellen', subtitle: 'Start van de eerste fase', assignee: 'Jan', phase: 'fase-1', status: 'todo', dueDate: '2026-11-01' },
+                        { id: '2', title: 'Design feedback verwerken', subtitle: 'Kwaliteitscheck uitvoeren', assignee: 'Sarah', phase: 'fase-2', status: 'doing', dueDate: '2026-11-05' }
+                    ];
+                }
+            } catch(e){}
+            
+            updatePhaseSelects();
+            renderKanbanColumns();
+            renderPhaseStats();
+        }
+
+        // Phase Select Options
+        function updatePhaseSelects() {
+            const selects = [
+                document.getElementById('task-phase-select'),
+                document.getElementById('edit-task-phase')
+            ];
+
+            selects.forEach(select => {
+                if (!select) return;
+                const currentVal = select.value;
+                select.innerHTML = window.phases.map(p => 
+                    `<option value="${p.id}" class="bg-slate-900 text-white">${escapeHtml(p.name)}</option>`
+                ).join('');
+                if (currentVal) select.value = currentVal;
+            });
+        }
+
+        // Render Kanban Board
+        function renderKanbanColumns() {
+            const container = document.getElementById('kanban-container');
+            if (!container) return;
+
+            const searchQuery = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+
+            container.innerHTML = '';
+
+            window.columns.forEach(col => {
+                const colTasks = window.tasks.filter(t => {
+                    const status = t.status || 'todo';
+                    const matchesCol = status === col.id;
+                    const matchesSearch = !searchQuery || 
+                                          (t.title && t.title.toLowerCase().includes(searchQuery)) || 
+                                          (t.subtitle && t.subtitle.toLowerCase().includes(searchQuery));
+                    return matchesCol && matchesSearch;
+                });
+
+                const colHtml = `
+                    <div class="glass-panel rounded-2xl p-4 flex flex-col space-y-3 min-h-[400px]">
+                        <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full ${col.color} shadow-sm"></div>
+                                <h2 class="font-bold text-sm tracking-wide text-white uppercase kanban-col-header-text">${escapeHtml(col.name)}</h2>
+                            </div>
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/10 text-cyan-200">${colTasks.length}</span>
+                        </div>
+
+                        <div id="col-${col.id}" class="kanban-col flex-1 space-y-3 p-1 rounded-xl transition-colors duration-200 min-h-[300px]" data-status="${col.id}">
+                            ${colTasks.map(task => {
+                                const phaseObj = window.phases.find(p => p.id === task.phase);
+                                const phaseName = phaseObj ? phaseObj.name : 'Geen Fase';
+
+                                return `
+                                <div class="glass-card rounded-xl p-3.5 space-y-2 border border-white/10 hover:border-cyan-400/40 cursor-grab active:cursor-grabbing transition-all select-none"
+                                     draggable="true" 
+                                     data-id="${task.id}">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="space-y-1 w-full">
+                                            <span class="font-semibold text-xs sm:text-sm text-white leading-snug break-words block">
+                                                ${escapeHtml(task.title || '')}
+                                            </span>
+                                            ${task.subtitle ? `
+                                                <div class="flex items-start gap-1 text-[11px] text-cyan-200/80 bg-black/20 p-1.5 rounded-md border border-white/5">
+                                                    <i data-lucide="subtitles" class="w-3 h-3 text-cyan-400 flex-shrink-0 mt-0.5"></i>
+                                                    <span class="break-words font-medium">${escapeHtml(task.subtitle)}</span>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                        <div class="flex items-center gap-1 flex-shrink-0">
+                                            <button onclick="openEditModal('${task.id}')" title="Bewerken" class="text-cyan-200/60 hover:text-cyan-400 p-1">
+                                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button onclick="deleteTask('${task.id}')" title="Verwijderen" class="text-cyan-200/50 hover:text-red-400 p-1">
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between gap-2 pt-1 text-[10px] text-cyan-200/70 flex-wrap">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/30 text-cyan-200 font-semibold flex items-center gap-1">
+                                                <i data-lucide="layers" class="w-2.5 h-2.5"></i> ${escapeHtml(phaseName)}
+                                            </span>
+                                            ${task.assignee ? `
+                                                <span class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-semibold flex items-center gap-1">
+                                                    <i data-lucide="user" class="w-2.5 h-2.5 text-emerald-400"></i> ${escapeHtml(task.assignee)}
+                                                </span>
+                                            ` : ''}
+                                        </div>
+                                        ${task.dueDate ? `
+                                            <span class="flex items-center gap-1 font-mono text-[10px] text-cyan-200/80">
+                                                <i data-lucide="calendar" class="w-3 h-3 text-cyan-400"></i> ${escapeHtml(task.dueDate)}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+
+                container.insertAdjacentHTML('beforeend', colHtml);
+            });
+
+            if (window.lucide) lucide.createIcons();
+            setupDragAndDrop();
+            renderPhaseStats();
+        }
+
+        // Render Progress Bar & Phase Stats
+        function renderPhaseStats() {
+            const totalTasks = window.tasks.length;
+            const completedTasks = window.tasks.filter(t => t.status === 'done').length;
+            const progressPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+            const progressBar = document.getElementById('overall-progress-bar');
+            const progressText = document.getElementById('overall-progress-text');
+            if (progressBar) progressBar.style.width = `${progressPct}%`;
+            if (progressText) progressText.innerText = `${progressPct}% Voltooid (${completedTasks}/${totalTasks})`;
+
+            const grid = document.getElementById('phase-stats-grid');
+            if (!grid) return;
+
+            grid.innerHTML = window.phases.map(p => {
+                const pTasks = window.tasks.filter(t => t.phase === p.id);
+                const pDone = pTasks.filter(t => t.status === 'done').length;
+                const pTodo = pTasks.filter(t => t.status !== 'done').length;
+                const pPct = pTasks.length > 0 ? Math.round((pDone / pTasks.length) * 100) : 0;
+
+                return `
+                    <div class="glass-card p-2.5 rounded-xl space-y-1.5 border border-white/10 shadow-sm">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="font-bold text-xs text-white truncate">${escapeHtml(p.name)}</span>
+                            <button onclick="deletePhase('${p.id}')" title="Fase verwijderen" class="text-cyan-200/40 hover:text-red-400 p-0.5">
+                                <i data-lucide="x-circle" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                        <div class="w-full h-1.5 bg-black/30 rounded-full overflow-hidden">
+                            <div class="h-full bg-cyan-400 rounded-full" style="width: ${pPct}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-cyan-200/80 font-medium">
+                            <span class="text-emerald-400 font-semibold">${pDone} klaar</span>
+                            <span class="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold flex items-center gap-0.5">
+                                <i data-lucide="clock" class="w-2.5 h-2.5"></i> ${pTodo} nog te doen
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        // Drag and Drop
+        function setupDragAndDrop() {
+            const cards = document.querySelectorAll('.glass-card[draggable="true"]');
+            const columns = document.querySelectorAll('.kanban-col');
+
+            cards.forEach(card => {
+                card.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', card.dataset.id);
+                    card.classList.add('opacity-50');
+                });
+
+                card.addEventListener('dragend', () => {
+                    card.classList.remove('opacity-50');
+                });
+            });
+
+            columns.forEach(col => {
+                col.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    col.classList.add('drag-over');
+                });
+
+                col.addEventListener('dragleave', () => {
+                    col.classList.remove('drag-over');
+                });
+
+                col.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    col.classList.remove('drag-over');
+                    const taskId = e.dataTransfer.getData('text/plain');
+                    const newStatus = col.dataset.status;
+
+                    const task = window.tasks.find(t => t.id === taskId);
+                    if (task && task.status !== newStatus) {
+                        task.status = newStatus;
+                        saveTasks();
+                        renderKanbanColumns();
+                        showToast(`Taak verplaatst naar ${newStatus.toUpperCase()}`);
+                    }
+                });
+            });
+        }
+
+        // Task Handlers
+        function handleAddTask(e) {
+            e.preventDefault();
+            const titleInput = document.getElementById('task-title');
+            const subtitleInput = document.getElementById('task-subtitle');
+            const assigneeInput = document.getElementById('task-assignee');
+            const phaseSelect = document.getElementById('task-phase-select');
+            const dueDateInput = document.getElementById('task-due-date');
+
+            if (!titleInput || !titleInput.value.trim()) return;
+
+            const newTask = {
+                id: Date.now().toString(),
+                title: titleInput.value.trim(),
+                subtitle: subtitleInput?.value.trim() || '',
+                assignee: assigneeInput?.value.trim() || '',
+                phase: phaseSelect?.value || window.phases[0]?.id || 'fase-1',
+                status: 'todo',
+                dueDate: dueDateInput?.value || ''
+            };
+
+            window.tasks.push(newTask);
+            saveTasks();
+            renderKanbanColumns();
+
+            titleInput.value = '';
+            if (subtitleInput) subtitleInput.value = '';
+            if (assigneeInput) assigneeInput.value = '';
+            showToast("Nieuwe taak toegevoegd! ✨");
+        }
+
+        function deleteTask(id) {
+            window.tasks = window.tasks.filter(t => t.id !== id);
+            saveTasks();
+            renderKanbanColumns();
+            showToast("Taak verwijderd");
+        }
+
+        // Edit Task Modal
+        function openEditModal(id) {
+            const task = window.tasks.find(t => t.id === id);
+            if (!task) return;
+
+            document.getElementById('edit-task-id').value = task.id;
+            document.getElementById('edit-task-title').value = task.title || '';
+            document.getElementById('edit-task-subtitle').value = task.subtitle || '';
+            document.getElementById('edit-task-assignee').value = task.assignee || '';
+            document.getElementById('edit-task-phase').value = task.phase || window.phases[0]?.id;
+            document.getElementById('edit-task-date').value = task.dueDate || '';
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        function handleSaveEditTask(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-task-id').value;
+            const task = window.tasks.find(t => t.id === id);
+            if (!task) return;
+
+            task.title = document.getElementById('edit-task-title').value.trim();
+            task.subtitle = document.getElementById('edit-task-subtitle').value.trim();
+            task.assignee = document.getElementById('edit-task-assignee').value.trim();
+            task.phase = document.getElementById('edit-task-phase').value;
+            task.dueDate = document.getElementById('edit-task-date').value;
+
+            saveTasks();
+            renderKanbanColumns();
+            closeEditModal();
+            showToast("Taak bijgewerkt 👍");
+        }
+
+        // Phase Handlers
+        function openPhaseModal() {
+            document.getElementById('phase-modal').classList.remove('hidden');
+        }
+
+        function closePhaseModal() {
+            document.getElementById('phase-modal').classList.add('hidden');
+        }
+
+        function handleCreatePhase(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('new-phase-name');
+            if (!nameInput || !nameInput.value.trim()) return;
+
+            const name = nameInput.value.trim();
+            const id = 'fase-' + Date.now();
+
+            window.phases.push({ id, name });
+            saveTasks();
+            updatePhaseSelects();
+            renderKanbanColumns();
+            closePhaseModal();
+
+            nameInput.value = '';
+            showToast(`Nieuwe fase "${name}" aangemaakt!`);
+        }
+
+        function deletePhase(id) {
+            if (window.phases.length <= 1) {
+                showToast("Er moet minimaal 1 fase blijven bestaan!");
+                return;
+            }
+            window.phases = window.phases.filter(p => p.id !== id);
+            saveTasks();
+            updatePhaseSelects();
+            renderKanbanColumns();
+            showToast("Fase verwijderd");
+        }
+
+        // Data Menu & Export
+        function toggleDataMenu() {
+            const menu = document.getElementById('data-menu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+                tasks: window.tasks,
+                phases: window.phases
+            }, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `aquatask_backup_${new Date().toISOString().slice(0,10)}.json`);
+            dlAnchorElem.click();
+            toggleDataMenu();
+            showToast("Data succesvol geëxporteerd!");
+        }
+
+        function triggerImport() {
+            document.getElementById('import-file-input')?.click();
+            toggleDataMenu();
+        }
+
+        function importData(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    if (imported.tasks) window.tasks = imported.tasks;
+                    if (imported.phases) window.phases = imported.phases;
+                    saveTasks();
+                    updatePhaseSelects();
+                    renderKanbanColumns();
+                    showToast("Data succesvol geïmporteerd! 🎉");
+                } catch(err) {
+                    showToast("Ongeldig JSON bestand!");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function clearCompletedTasks() {
+            window.tasks = window.tasks.filter(t => t.status !== 'done');
+            saveTasks();
+            renderKanbanColumns();
+            toggleDataMenu();
+            showToast("Voltooide taken gewist!");
+        }
+
+        // Global Event Listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeEditModal();
+                closePhaseModal();
+                document.getElementById('data-menu')?.classList.add('hidden');
+            }
+        });
+
+        // App Init
+        window.onload = function() {
+            generateBubbles();
+            loadTasks();
+
+            const startAudioOnGesture = () => {
+                if (soundEnabled) startAmbientSound();
+                window.removeEventListener('click', startAudioOnGesture);
+                window.removeEventListener('keydown', startAudioOnGesture);
+            };
+            window.addEventListener('click', startAudioOnGesture);
+            window.addEventListener('keydown', startAudioOnGesture);
+        };
+    </script>
+</body>
+</html>
