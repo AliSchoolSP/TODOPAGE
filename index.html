@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaTask - Oceaan Kanban & To-Do</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ocean: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            800: '#075985',
+                            900: '#0369a1',
+                            950: '#082f49',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 relative overflow-x-hidden selection:bg-cyan-500 selection:text-white transition-colors duration-300">
+
+    <!-- Dynamic Ocean Background -->
+    <div id="ocean-bg" class="fixed inset-0 pointer-events-none z-0 bg-gradient-to-b from-slate-950 via-slate-900 to-sky-950 transition-colors duration-500">
+        <div class="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-400 via-sky-500 to-transparent"></div>
+        <div id="bubbles-container" class="absolute inset-0"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Navigation / Header -->
+        <header class="glass-panel rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+                    <i data-lucide="waves" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        AquaTask <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">v2.5</span>
+                    </h1>
+                    <p class="text-xs text-cyan-200/70">Capture, organize and tackle your to-dos</p>
+                </div>
+            </div>
+
+            <!-- Header Controls -->
+            <div class="flex items-center flex-wrap gap-2 sm:gap-3">
+                <!-- Sound Toggle -->
+                <button onclick="toggleAmbientSound()" id="sound-btn" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-medium text-cyan-200 border border-white/10 transition-all">
+                    <i data-lucide="volume-2" id="sound-icon" class="w-4 h-4 text-emerald-400"></i>
+                    <span id="sound-text" class="hidden sm:inline">Sfeer Muziek (AAN)</span>
+                </button>
+
+                <!-- Directe Backup Download Knop -->
+                <button onclick="exportData()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition-all text-xs font-semibold active:scale-95" title="Download direct een backup (JSON)">
+                    <i data-lucide="download" class="w-4 h-4 text-cyan-300"></i>
+                    <span class="hidden sm:inline">Backup Downloaden</span>
+                </button>
+
+                <!-- Snelknop Backup Uploaden -->
+                <button onclick="triggerImport()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 transition-all text-xs font-semibold active:scale-95" title="Upload eerder gemaakte backup">
+                    <i data-lucide="upload" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="hidden sm:inline">Backup Uploaden</span>
+                </button>
+                <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="importData(event)">
+            </div>
+        </header>
+
+        <!-- Progress Bar & Phase Stats Monitor -->
+        <section class="glass-panel rounded-2xl p-4 space-y-4 shadow-lg">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5 text-cyan-400"></i>
+                    <h2 class="font-semibold text-sm text-white">Totale Voortgang</h2>
+                </div>
+                <span id="overall-progress-text" class="text-xs font-bold font-mono text-cyan-300">0% Voltooid</span>
+            </div>
+            
+            <div class="w-full h-2.5 bg-black/30 rounded-full overflow-hidden p-0.5 border border-white/5">
+                <div id="overall-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+
+            <!-- Phase Monitors Container -->
+            <div id="phase-stats-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-2">
+                <!-- Dynamisch gegenereerd -->
+            </div>
+        </section>
+
+        <!-- Task Input Box & Phase Creation -->
+        <section class="glass-panel rounded-2xl p-5 shadow-xl space-y-4 border border-white/10">
+            <form id="add-task-form" onsubmit="handleAddTask(event)" class="space-y-3">
+                <div class="space-y-3">
+                    <!-- Title Row -->
+                    <div>
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Taak Titel *</label>
+                        <input type="text" id="task-title" placeholder="Wat moet er gebeuren?" required
+                            class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400 transition-all">
+                    </div>
+
+                    <!-- Subtitle / Description Row -->
+                    <div>
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Ondertitel / Beschrijving (optioneel)</label>
+                        <input type="text" id="task-subtitle" placeholder="Korte toelichting of extra details..."
+                            class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400 transition-all">
+                    </div>
+
+                    <!-- Assignee / Person Responsible Row -->
+                    <div>
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Wie is hiermee bezig? (optioneel)</label>
+                        <input type="text" id="task-assignee" placeholder="bijv. Jan, Sarah, Team A..."
+                            class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400 transition-all">
+                    </div>
+                </div>
+
+                <!-- Phase, Date & Submit Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2 items-end">
+                    <div class="sm:col-span-5">
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Selecteer Type / Fase</label>
+                        <select id="task-phase-select" class="w-full px-4 py-2.5 rounded-xl bg-black/20 border border-white/10 text-sm text-white focus:outline-none focus:border-cyan-400 transition-all">
+                            <!-- Dynamic Options -->
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-4">
+                        <label class="block text-xs font-semibold text-cyan-200 mb-1">Vervaldatum</label>
+                        <input type="date" id="task-due-date" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-xs text-cyan-200 focus:outline-none h-[42px]">
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <button type="submit" class="w-full h-[42px] px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs tracking-wide shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                            <span>Taak Toevoegen</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Nieuw Type / Fase Knop als Database Icoontje -->
+            <div class="pt-3 border-t border-white/10 flex items-center justify-between">
+                <span class="text-xs text-cyan-200/70 font-medium">Beheer fasen & categorieën</span>
+                <button onclick="openPhaseModal()" title="Nieuwe fase of categorie toevoegen" class="p-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/30 transition-all flex items-center gap-2 text-xs font-semibold">
+                    <i data-lucide="database" class="w-4 h-4 text-cyan-400"></i>
+                    <span class="hidden sm:inline">Nieuwe Fase</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Search Bar -->
+        <div class="flex items-center justify-between gap-4">
+            <div class="relative flex-1">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cyan-300/60"></i>
+                <input type="text" id="search-input" oninput="renderKanbanColumns()" placeholder="Zoek op titel of ondertitel..." 
+                       class="w-full pl-9 pr-4 py-2 rounded-xl glass-panel text-xs text-white placeholder-cyan-200/50 focus:outline-none focus:border-cyan-400">
+            </div>
+        </div>
+
+        <!-- Kanban Board Columns (To Do, Doing, Done) -->
+        <main id="kanban-container" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Dynamic Kanban Columns -->
+        </main>
+    </div>
+
+    <!-- Modal: Add New Phase / Type -->
+    <div id="phase-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/20 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i data-lucide="folder-plus" class="w-5 h-5 text-cyan-400"></i> Nieuw Type / Fase Toevoegen
+                </h3>
+                <button onclick="closePhaseModal()" class="text-cyan-200/60 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <form onsubmit="handleCreatePhase(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Naam van Type / Fase</label>
+                    <input type="text" id="new-phase-name" placeholder="bijv. Fase 4 of Design" required
+                           class="w-full px-4 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white focus:outline-none focus:border-cyan-400">
+                </div>
+                
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closePhaseModal()" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-cyan-200">Annuleren</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-xs font-bold text-white shadow-lg">Toevoegen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Task -->
+    <div id="edit-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/20 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-5 h-5 text-cyan-400"></i> Taak Bewerken
+                </h3>
+                <button onclick="closeEditModal()" class="text-cyan-200/60 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <form onsubmit="handleSaveEditTask(event)" class="space-y-3">
+                <input type="hidden" id="edit-task-id">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Titel</label>
+                    <input type="text" id="edit-task-title" required class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Ondertitel</label>
+                    <input type="text" id="edit-task-subtitle" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Wie is hiermee bezig?</label>
+                    <input type="text" id="edit-task-assignee" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Fase / Type</label>
+                    <select id="edit-task-phase" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white"></select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-cyan-200 mb-1">Vervaldatum</label>
+                    <input type="date" id="edit-task-date" class="w-full px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-white">
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 rounded-xl bg-white/5 text-xs text-cyan-200">Annuleren</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-500 text-xs font-bold text-white shadow-lg">Opslaan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Application JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
